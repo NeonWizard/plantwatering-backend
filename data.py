@@ -134,9 +134,9 @@ def main():
 	zerf = User.retrieve(username="ZeRf")
 
 	print(semiz.username)
-	print(semiz.email)
+	print("Semiz email before change: " + semiz.email)
 	semiz.email = "garfield@gmail.com"
-	print(semiz.email)
+	print("Semiz email after change: " + semiz.email)
 
 	print()
 
@@ -145,8 +145,10 @@ def main():
 
 	User.delete("ZeRf")
 
-	print(semiz.verifyPassword("kittybiscuit1"))
-	print(semiz.verifyPassword("notkittybiscuit1"))
+	print()
+
+	print("Semiz password checking correct: " + str(semiz.verifyPassword("kittybiscuit1")))
+	print("Semiz password checking incorrect: " + str(semiz.verifyPassword("notkittybiscuit1")))
 
 
 if __name__ == "__main__":

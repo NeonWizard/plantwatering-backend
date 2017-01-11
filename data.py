@@ -41,10 +41,10 @@ class User:
 			CREATE TABLE IF NOT EXISTS users 
 			(
 				UID INTEGER PRIMARY KEY, 
-				username VARCHAR(20), 
-				password BLOB, 
-				email VARCHAR(20), 
-				emailNotifications BOOLEAN
+				username VARCHAR(20) NOT NULL UNIQUE, 
+				password BLOB NOT NULL, 
+				email VARCHAR(20) NOT NULL, 
+				emailNotifications BOOLEAN NOT NULL
 			)
 	""")
 		conn.commit()
@@ -52,7 +52,7 @@ class User:
 	@staticmethod
 	def retrieve(UID=None, username=None, email=None):
 		if username: username = username.lower()
-		for row in curs.execute("SELECT * FROM users WHERE UID=? OR username=? OR email=?", [UID, username, email]):
+		for row in curs.execute("SELECT * FROM users WHERE UID=? OR username=? OR email=?", (UID, username, email)):
 			data = {}
 			data["UID"] = int(row[0])
 			data["username"] = str(row[1])
@@ -80,13 +80,13 @@ class User:
 		return True, "Success."
 
 	@staticmethod
-	def delete(username):
+	def delete(UID=None, username=None):
 		username = username.lower()
 
-		u = User.retrieve(username=username)
+		u = User.retrieve(UID=UID, username=username)
 		if not u: return False
 
-		curs.execute("DELETE FROM users WHERE username=?", (username, ))
+		curs.execute("DELETE FROM users WHERE username=? or UID=?", (username, UID))
 		conn.commit()
 
 		return True
@@ -107,23 +107,71 @@ class User:
 		return decoded["UID"] == self._cached["UID"]
 
 class Plant:
+	PID = SQLProperty("PID")
+	UID = SQLProperty("UID")
+	name = SQLProperty("name")
+	species = SQLProperty("species")
+	waterInterval = SQLProperty("waterInterval")
+
+	def __init__(self, data):
+		self._cached = data
+
 	@staticmethod
 	def createTable():
 		curs.execute("""
 			CREATE TABLE IF NOT EXISTS plants
 			(
-				ID INTEGER PRIMARY KEY,
+				PID INTEGER PRIMARY KEY,
 				UID REFERENCES users(UID),
-				name VARCHAR(20)
+				name VARCHAR(20) NOT NULL,
+				species VARCHAR(30) NOT NULL,
+				waterInterval DECIMAL(5, 2) NOT NULL
 			)
 	""")
 		conn.commit()
+	
+	@staticmethod
+	def retrieve(PID):
+		for row in curs.execute("SELECT * FROM plants WHERE PID=?", (PID, )):
+			data = {}
+			data["PID"] = int(row[0])
+			data["UID"] = int(row[1])
+			data["name"] = str(row[2])
+			data["species"] = str(row[3])
+			data["waterInterval"] = float(row[4])
+
+			return(Plant(data))
+		return None
+
+	@staticmethod
+	def create(UID, name, species, waterInterval):
+		waterInterval = round(waterInterval, 2) # Limit to 2 decimal points, plus ensure waterInterval is a float
+
+		if not User.retrieve(UID=UID):
+			return False, "No users with that UID exist."
+
+		curs.execute("INSERT INTO plants (UID, name, species, waterInterval) VALUES (?, ?, ?, ?)", (UID, name, species, waterInterval))
+		conn.commit()
+
+		return True, "Success."
+
+	@staticmethod
+	def delete(PID):
+		p = Plant.retrieve(PID)
+		if not p: return False
+
+		curs.execute("DELETE FROM plants WHERE PID=?", (PID, ))
+		conn.commit()
+
+		return True
 
 
 User.createTable()
 Plant.createTable()
 
 def main():
+	# --- User testing ---
+
 	User.create("Semiz", "kittybiscuit1", "email@gmail.com", False)
 	User.create("AverageWizard", "password123", "averagewizard13@gmail.com", True)
 	User.create("zErF", "aojdbasd", "alshdausdv@email.com")
@@ -143,13 +191,20 @@ def main():
 	print(zerf.username)
 	print(zerf.email)
 
-	User.delete("ZeRf")
+	User.delete(username="ZeRf")
 
 	print()
 
 	print("Semiz password checking correct: " + str(semiz.verifyPassword("kittybiscuit1")))
 	print("Semiz password checking incorrect: " + str(semiz.verifyPassword("notkittybiscuit1")))
 
+
+	# --- Plant testing --
+	print("\n")
+	print(Plant.create(1, "Rose #1", "Rose", 24))
+
+	Plant.retrieve(1)
+	print(rose1.name)
 
 if __name__ == "__main__":
 	main()

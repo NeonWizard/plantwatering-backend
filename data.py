@@ -64,6 +64,20 @@ class User:
 		return None
 
 	@staticmethod
+	def retrieveAll():
+		items = []
+		for row in curs.execute("SELECT * FROM users"):
+			data = {}
+			data["UID"] = int(row[0])
+			data["username"] = str(row[1])
+			data["password"] = bytes(row[2])
+			data["email"] = str(row[3])
+			data["emailNotifications"] = bool(row[4])
+
+			items.append(data)
+		return items
+
+	@staticmethod
 	def create(username, password, email, emailNotifications=True):
 		username = username.lower()
 		if User.retrieve(username=username):
@@ -144,6 +158,20 @@ class Plant:
 		return None
 
 	@staticmethod
+	def retrieveAll():
+		items = []
+		for row in curs.execute("SELECT * FROM plants"):
+			data = {}
+			data["PID"] = int(row[0])
+			data["UID"] = int(row[1])
+			data["name"] = str(row[2])
+			data["species"] = str(row[3])
+			data["waterInterval"] = float(row[4])
+
+			items.append(data)
+		return items
+
+	@staticmethod
 	def create(UID, name, species, waterInterval):
 		waterInterval = round(waterInterval, 2) # Limit to 2 decimal points, plus ensure waterInterval is a float
 
@@ -171,7 +199,7 @@ Plant.createTable()
 
 def main():
 	# --- User testing ---
-
+	print("User testing:")
 	User.create("Semiz", "kittybiscuit1", "email@gmail.com", False)
 	User.create("AverageWizard", "password123", "averagewizard13@gmail.com", True)
 	User.create("zErF", "aojdbasd", "alshdausdv@email.com")
@@ -198,12 +226,16 @@ def main():
 	print("Semiz password checking correct: " + str(semiz.verifyPassword("kittybiscuit1")))
 	print("Semiz password checking incorrect: " + str(semiz.verifyPassword("notkittybiscuit1")))
 
+	print(User.retrieveAll())
 
 	# --- Plant testing --
-	print("\n")
-	print(Plant.create(1, "Rose #1", "Rose", 24))
+	print("\nPlant testing:")
+	
+	Plant.delete(1) # Delete the plant from last execution of this
 
-	Plant.retrieve(1)
+	Plant.create(1, "Rose #1", "Rose", 24)
+
+	rose1 = Plant.retrieve(1)
 	print(rose1.name)
 
 if __name__ == "__main__":

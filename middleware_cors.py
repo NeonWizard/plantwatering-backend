@@ -32,7 +32,7 @@ class CORSMiddleware(object):
         if request.method == 'OPTIONS':
 
             # return allowed methods
-            response.set_header('Access-Control-Allow-Methods', '*')
+            response.set_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
 
             # get all requested headers and echo them back
             requested_headers = request.get_header('Access-Control-Request-Headers')

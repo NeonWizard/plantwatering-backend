@@ -8,8 +8,9 @@ conn = sqlite3.connect("PlantWatering.db")
 curs = conn.cursor()
 
 class SQLProperty():
-	def __init__(self, name):
+	def __init__(self, name, tableName):
 		self._name = name
+		self._tableName = tableName
 
 	def __get__(self, instance, type):
 		if instance is None:
@@ -20,17 +21,18 @@ class SQLProperty():
 	def __set__(self, instance, value):
 		if not value: return
 
-		curs.execute("UPDATE users SET %s=? WHERE UID=?" % self._name, (value, instance._cached["UID"]))
+		curs.execute("UPDATE {} SET {}=? WHERE {}=?".format(self._tableName, self._name, instance.primaryKey), (value, instance._cached[instance.primaryKey]))
 		conn.commit()
 
 		instance._cached[self._name] = value
 
 class User:
-	UID = SQLProperty("UID")
-	username = SQLProperty("username")
-	password = SQLProperty("password")
-	email = SQLProperty("email")
-	emailNotifications = SQLProperty("emailNotifications")
+	primaryKey = "UID"
+	UID = SQLProperty("UID", "users")
+	username = SQLProperty("username", "users")
+	password = SQLProperty("password", "users")
+	email = SQLProperty("email", "users")
+	emailNotifications = SQLProperty("emailNotifications", "users")
 
 	def __init__(self, data):
 		self._cached = data
@@ -50,32 +52,33 @@ class User:
 		conn.commit()
 
 	@staticmethod
+	def _packData(row):
+		data = {
+			"UID": int(row[0]),
+			"username": str(row[1]),
+			"password": bytes(row[2]),
+			"email": str(row[3]),
+			"emailNotifications": bool(row[4])
+		}
+		return(data)
+
+	@staticmethod
 	def retrieve(UID=None, username=None, email=None):
 		if username: username = username.lower()
 		for row in curs.execute("SELECT * FROM users WHERE UID=? OR username=? OR email=?", (UID, username, email)):
-			data = {}
-			data["UID"] = int(row[0])
-			data["username"] = str(row[1])
-			data["password"] = bytes(row[2])
-			data["email"] = str(row[3])
-			data["emailNotifications"] = bool(row[4])
+			data = User._packData(row)
 
 			return(User(data))
-		return None
+		return(None)
 
 	@staticmethod
 	def retrieveAll():
 		items = []
 		for row in curs.execute("SELECT * FROM users"):
-			data = {}
-			data["UID"] = int(row[0])
-			data["username"] = str(row[1])
-			data["password"] = bytes(row[2])
-			data["email"] = str(row[3])
-			data["emailNotifications"] = bool(row[4])
+			data = User._packData(row)
 
 			items.append(data)
-		return items
+		return(items)
 
 	@staticmethod
 	def create(username, password, email, emailNotifications=True):
@@ -121,11 +124,13 @@ class User:
 		return decoded["UID"] == self._cached["UID"]
 
 class Plant:
-	PID = SQLProperty("PID")
-	UID = SQLProperty("UID")
-	name = SQLProperty("name")
-	species = SQLProperty("species")
-	waterInterval = SQLProperty("waterInterval")
+	primaryKey = "PID"
+	PID = SQLProperty("PID", "plants")
+	UID = SQLProperty("UID", "plants")
+	name = SQLProperty("name", "plants")
+	species = SQLProperty("species", "plants")
+	waterInterval = SQLProperty("waterInterval", "plants")
+	lastWatered = SQLProperty("lastWatered", "plants")
 
 	def __init__(self, data):
 		self._cached = data
@@ -136,40 +141,53 @@ class Plant:
 			CREATE TABLE IF NOT EXISTS plants
 			(
 				PID INTEGER PRIMARY KEY,
-				UID REFERENCES users(UID),
+				UID INTEGER,
 				name VARCHAR(20) NOT NULL,
 				species VARCHAR(30) NOT NULL,
-				waterInterval DECIMAL(5, 2) NOT NULL
+				waterInterval DECIMAL(5, 2) NOT NULL,
+				lastWatered TIMESTAMP NOT NULL,
+				FOREIGN KEY (UID) REFERENCES users(UID)
 			)
 	""")
 		conn.commit()
+
+	@staticmethod
+	def _packData(row):
+		data = {
+			"PID": int(row[0]),
+			"UID": int(row[1]),
+			"name": str(row[2]),
+			"species": str(row[3]),
+			"waterInterval": float(row[4]),
+			"lastWatered": str(row[5])
+		}
+		return(data)
 	
 	@staticmethod
 	def retrieve(PID):
 		for row in curs.execute("SELECT * FROM plants WHERE PID=?", (PID, )):
-			data = {}
-			data["PID"] = int(row[0])
-			data["UID"] = int(row[1])
-			data["name"] = str(row[2])
-			data["species"] = str(row[3])
-			data["waterInterval"] = float(row[4])
+			data = Plant._packData(row)
 
 			return(Plant(data))
-		return None
+		return(None)
+
+	@staticmethod
+	def retrieveAllUser(UID):
+		items = []
+		for row in curs.execute("SELECT * FROM plants WHERE UID=?", (UID, )):
+			data = Plant._packData(row)
+
+			items.append(data)
+		return(items)
 
 	@staticmethod
 	def retrieveAll():
 		items = []
 		for row in curs.execute("SELECT * FROM plants"):
-			data = {}
-			data["PID"] = int(row[0])
-			data["UID"] = int(row[1])
-			data["name"] = str(row[2])
-			data["species"] = str(row[3])
-			data["waterInterval"] = float(row[4])
+			data = Plant._packData(row)
 
 			items.append(data)
-		return items
+		return(items)
 
 	@staticmethod
 	def create(UID, name, species, waterInterval):
@@ -178,7 +196,7 @@ class Plant:
 		if not User.retrieve(UID=UID):
 			return False, "No users with that UID exist."
 
-		curs.execute("INSERT INTO plants (UID, name, species, waterInterval) VALUES (?, ?, ?, ?)", (UID, name, species, waterInterval))
+		curs.execute("INSERT INTO plants (UID, name, species, waterInterval, lastWatered) VALUES (?, ?, ?, ?, ?)", (UID, name, species, waterInterval, 0))
 		conn.commit()
 
 		return True, "Success."
@@ -200,19 +218,12 @@ Plant.createTable()
 def main():
 	# --- User testing ---
 	print("User testing:")
-	User.create("Semiz", "kittybiscuit1", "email@gmail.com", False)
 	User.create("AverageWizard", "password123", "averagewizard13@gmail.com", True)
 	User.create("zErF", "aojdbasd", "alshdausdv@email.com")
 	User.create("xanu", "password123", "anthony.george@dixiesuccess.org", True)
 
-	semiz = User.retrieve(username="Semiz")
 	averagewizard = User.retrieve(username="AverageWizard")
 	zerf = User.retrieve(username="ZeRf")
-
-	print(semiz.username)
-	print("Semiz email before change: " + semiz.email)
-	semiz.email = "garfield@gmail.com"
-	print("Semiz email after change: " + semiz.email)
 
 	print()
 
@@ -223,19 +234,21 @@ def main():
 
 	print()
 
-	print("Semiz password checking correct: " + str(semiz.verifyPassword("kittybiscuit1")))
-	print("Semiz password checking incorrect: " + str(semiz.verifyPassword("notkittybiscuit1")))
+	print("AverageWizard password checking correct: " + str(averagewizard.verifyPassword("password123")))
+	print("AverageWizard password checking incorrect: " + str(averagewizard.verifyPassword("notpassword123")))
 
 	print(User.retrieveAll())
 
 	# --- Plant testing --
 	print("\nPlant testing:")
 	
-	Plant.delete(1) # Delete the plant from last execution of this
+	Plant.delete(4) # Delete the plant from last execution of this
+	Plant.delete(5)
 
-	Plant.create(1, "Rose #1", "Rose", 24)
+	Plant.create(2, "Rose #1", "Rose", 24)
+	Plant.create(2, "Rose #2", "Rose", 24)
 
-	rose1 = Plant.retrieve(1)
+	rose1 = Plant.retrieve(4)
 	print(rose1.name)
 
 if __name__ == "__main__":

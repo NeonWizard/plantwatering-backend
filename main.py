@@ -1,10 +1,11 @@
 import hug
 import falcon
-from hug_middleware_cors import CORSMiddleware
+# from hug_middleware_cors import CORSMiddleware
+from middleware_cors import CORSMiddleware
 
 import random
 
-import data
+from data import *
 
 api = hug.API(__name__)
 api.http.add_middleware(CORSMiddleware(api))
@@ -25,12 +26,12 @@ def register(body=None, response=None):
 
 	username, email, password = body["username"], body["email"], body["password"]
 
-	status, message = data.User.create(username, password, email)
+	status, message = User.create(username, password, email)
 	if not status:
 		response.status = falcon.HTTP_400
 		return({"error": message})
 
-	token = data.User.retrieve(username=username).createToken()
+	token = User.retrieve(username=username).createToken()
 	return({"id_token": token})
 
 # Retrieve user by ID and create a JWT
@@ -47,7 +48,7 @@ def loginUser(body=None, response=None):
 		return({"error": "Username or password not provided."})
 
 	username, password = body["username"].lower(), body["password"]
-	user = data.User.retrieve(username=username)
+	user = User.retrieve(username=username)
 
 	# If no user exists under the supplied username
 	if not user:
@@ -61,9 +62,10 @@ def loginUser(body=None, response=None):
 
 	print(username + " logged in successfully!")
 
-	return({"id_token": user.createToken()})
-
-
+	return({
+		"id_token": user.createToken(),
+		"UID": user.UID
+	})
 
 def verifyUser(user, request=None, response=None):
 	if "AUTHORIZATION" not in request.headers:
@@ -82,17 +84,82 @@ def verifyUser(user, request=None, response=None):
 	return "" # woot
 
 
-# # Retrieve user's plants
-# @hug.get("/users/{UID}/plants")
-# def getUserPlants(UID, request=None, response=None):
-# 	UID = int(UID)
-# 	user = UM.retrieve(UID=int(UID))
+# Retrieve user's plants
+@hug.get("/users/{UID}/plants")
+def getUserPlants(UID, request=None, response=None):
+	try:
+		UID = int(UID)
+	except ValueError:
+		response.status = falcon.HTTP_400
+		return({"error": "Invalid user ID."})
 
-# 	message = verifyUser(user, request, response)
-# 	if message: return(message)
+	user = User.retrieve(UID=UID)
 
-# 	print(user.getUsername() + " has been given their list of plants.")
-# 	return("User verified!")
+	message = verifyUser(user, request, response)
+	if message: return message
+
+	plants = Plant.retrieveAllUser(UID)
+	# for p in plants: p.pop("PID") # exclude PID key for security reasons
+
+	return({"plants": plants})
+
+@hug.delete("/users/{UID}/plants/{PID}")
+def deletePlant(UID, PID, request=None, response=None):
+	try:
+		UID = int(UID)
+		PID = int(PID)
+	except ValueError:
+		response.status = falcon.HTTP_400
+		return({"error": "Invalid user or plant ID."})
+
+	user = User.retrieve(UID=UID)
+
+	message = verifyUser(user, request, response)
+	if message: return message
+
+	plant = Plant.retrieve(PID)
+	if not plant:
+		response.status = falcon.HTTP_404
+		return {"error": "Plant couldn't be found under provided PID."}
+
+	if plant.UID != UID:
+		response.status = falcon.HTTP_403
+		return {"error": "User doesn't own specified plant."}
+
+	if not Plant.delete(PID=PID):
+		# This should never run because it only returns False when the plant doesn't exist, which is already covered above
+		return {"error": "Plant could not be deleted."}
+
+
+@hug.put("/users/{UID}/plants/{PID}/water")
+def waterPlant(UID, PID, request=None, response=None):
+	try:
+		UID = int(UID)
+		PID = int(PID)
+	except ValueError:
+		response.status = falcon.HTTP_400
+		return({"error": "Invalid user or plant ID."})
+
+	user = User.retrieve(UID=UID)
+
+	message = verifyUser(user, request, response)
+	if message: return message
+
+	plant = Plant.retrieve(PID)
+	if not plant:
+		response.status = falcon.HTTP_404
+		return {"error": "Plant couldn't be found under provided PID."}
+
+	if plant.UID != UID:
+		response.status = falcon.HTTP_403
+		return {"error": "User doesn't own specified plant."}
+
+	if "TIMESTAMP" not in request.headers:
+		response.status = falcon.HTTP_400
+		return {"error": "No timestamp provided in headers."}
+	
+	plant.lastWatered = request.headers["TIMESTAMP"]
+
 
 # # Retrieve a plant from a user, using a UID and PID
 # @hug.get("/users/{UID}/plants/{PID}")

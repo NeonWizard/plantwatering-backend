@@ -126,7 +126,7 @@ def addPlant(UID, body=None, request=None, response=None):
 	if message: return message
 
 	# Create the plant
-	name, species, waterInterval = body["name"], body["species"], body["waterInterval"]
+	name, species, waterInterval = body["name"], body["species"], int(body["waterInterval"])
 
 	status, message = Plant.create(UID, name, species, waterInterval)
 	if not status:

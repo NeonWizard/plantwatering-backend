@@ -17,22 +17,22 @@ def register(body=None, response=None):
 	# If a body isn't provided
 	if not body:
 		response.status = falcon.HTTP_400
-		return({"error": "No fields were filled."})
+		return {"error": "No fields were filled."}
 
 	# If the body doesn't contain all required fields
 	if "username" not in body or "email" not in body or "password" not in body:
 		response.status = falcon.HTTP_400
-		return({"error": "Not all required fields were filled."})
+		return {"error": "Not all required fields were filled."}
 
 	username, email, password = body["username"], body["email"], body["password"]
 
 	status, message = User.create(username, password, email)
 	if not status:
 		response.status = falcon.HTTP_400
-		return({"error": message})
+		return {"error": message}
 
 	token = User.retrieve(username=username).createToken()
-	return({"id_token": token})
+	return {"id_token": token}
 
 # Retrieve user by ID and create a JWT
 @hug.post("/users/authenticate")
@@ -70,16 +70,16 @@ def loginUser(body=None, response=None):
 def verifyUser(user, request=None, response=None):
 	if "AUTHORIZATION" not in request.headers:
 		response.status = falcon.HTTP_400
-		return({"error": "Authorization key not provided in header."})
+		return {"error": "Authorization key not provided in header."}
 	jwt = request.headers["AUTHORIZATION"].split()[1]
 
 	if not user:
 		response.status = falcon.HTTP_400
-		return({"error": "User does not exist."})
+		return {"error": "User does not exist."}
 
 	if not user.verifyToken(jwt):
 		response.status = falcon.HTTP_403
-		return({"error": "Not authorized."})
+		return {"error": "Not authorized."}
 
 	return "" # woot
 
@@ -103,6 +103,36 @@ def getUserPlants(UID, request=None, response=None):
 
 	return({"plants": plants})
 
+@hug.post("/users/{UID}/plants")
+def addPlant(UID, body=None, request=None, response=None):
+	try:
+		UID = int(UID)
+	except ValueError:
+		response.status = falcon.HTTP_400
+		return {"error": "Invalid user ID."}
+
+	if not body:
+		response.status = falcon.HTTP_400
+		return {"error": "No fields were filled."}
+
+	if "name" not in body or "species" not in body or "waterInterval" not in body:
+		response.status = falcon.HTTP_400
+		return {"error": "Not all required fields were filled."}
+
+	# Verify user
+	user = User.retrieve(UID=UID)
+
+	message = verifyUser(user, request, response)
+	if message: return message
+
+	# Create the plant
+	name, species, waterInterval = body["name"], body["species"], body["waterInterval"]
+
+	status, message = Plant.create(UID, name, species, waterInterval)
+	if not status:
+		response.status = HTTP_400
+		return {"error": message}
+
 @hug.delete("/users/{UID}/plants/{PID}")
 def deletePlant(UID, PID, request=None, response=None):
 	try:
@@ -110,7 +140,7 @@ def deletePlant(UID, PID, request=None, response=None):
 		PID = int(PID)
 	except ValueError:
 		response.status = falcon.HTTP_400
-		return({"error": "Invalid user or plant ID."})
+		return {"error": "Invalid user or plant ID."}
 
 	user = User.retrieve(UID=UID)
 
